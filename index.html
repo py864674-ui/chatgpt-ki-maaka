@@ -96,40 +96,66 @@ const remoteVideo = document.getElementById("remoteVideo");
   const database = firebase.database();
 
   // Join Room
-  joinBtn.onclick = function() {
-    const roomId = roomInput.value.trim();
-    if (!roomId) { alert("Enter Room ID!"); return; }
-    currentRoom = roomId;
-    // Clean old call data
-database.ref("calls/" + currentRoom).remove();
-    // ===== WebRTC Setup =====
-database.ref("calls/" + currentRoom + "/offer").once("value")
-  .then(snapshot => {
-    if (!snapshot.exists()) {
-      createOffer();
+joinBtn.onclick = function() {
+  const roomId = roomInput.value.trim();
+  if (!roomId) { alert("Enter Room ID!"); return; }
+
+  // Reset old peer connection
+  if (peerConnection) {
+    peerConnection.close();
+    peerConnection = null;
+  }
+
+  currentRoom = roomId;
+
+  // Determine if host FIRST
+  database.ref("rooms/" + currentRoom + "/video").once("value", snapshot => {
+    isHost = !snapshot.exists();
+
+    if (isHost) {
+      // 🔥 Only host clears previous WebRTC call data
+      database.ref("calls/" + currentRoom).remove();
+      alert("You are the host.");
     } else {
-      answerOffer(snapshot.val());
+      alert("You are a viewer.");
+    }
+
+    // ===== WebRTC Setup Trigger =====
+    database.ref("calls/" + currentRoom + "/offer").once("value")
+      .then(snapshot => {
+        if (!snapshot.exists()) {
+          createOffer();
+        } else {
+          answerOffer(snapshot.val());
+        }
+      });
+  });
+
+  // Your movie sync listeners stay exactly as they were
+  database.ref("rooms/" + currentRoom + "/video").on("value", snapshot => {
+    const data = snapshot.val();
+    if (!data) return;
+    if (!isHost) {
+      moviePlayer.src = data.url;
+      moviePlayer.currentTime = data.time || 0;
+      if (data.playing) moviePlayer.play();
+      else moviePlayer.pause();
     }
   });
 
-    // Determine if host
-    database.ref("rooms/" + currentRoom + "/video").once("value", snapshot => {
-      isHost = !snapshot.exists();
-      if (isHost) alert("You are the host. Paste a video URL.");
-      else alert("You are a viewer. Video will load automatically.");
-    });
+  database.ref("rooms/" + currentRoom + "/sync").on("value", snapshot => {
+    if (isHost) return;
+    const data = snapshot.val();
+    if (!data) return;
 
-    // Listen for video URL changes
-    database.ref("rooms/" + currentRoom + "/video").on("value", snapshot => {
-      const data = snapshot.val();
-      if (!data) return;
-      if (!isHost) {
-        moviePlayer.src = data.url;
-        moviePlayer.currentTime = data.time || 0;
-        if (data.playing) moviePlayer.play();
-        else moviePlayer.pause();
-      }
-    });
+    const diff = Math.abs(moviePlayer.currentTime - data.time);
+    if (diff > SYNC_THRESHOLD) {
+      moviePlayer.currentTime = data.time;
+    }
+    if (data.playing && moviePlayer.paused) moviePlayer.play();
+    if (!data.playing && !moviePlayer.paused) moviePlayer.pause();
+  });
+};
 
     // Listen for sync updates
     database.ref("rooms/" + currentRoom + "/sync").on("value", snapshot => {
