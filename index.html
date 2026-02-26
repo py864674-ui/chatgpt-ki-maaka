@@ -33,7 +33,8 @@
 <video id="localVideo" autoplay muted playsinline></video>
 <div id="remoteVideos"></div>
 <script>
-window.onload = function() {navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+window.onload = function() {
+  navigator.mediaDevices.getUserMedia({ video: true, audio: true })
   .then(stream => {
     const localVideo = document.getElementById('localVideo');
     localVideo.srcObject = stream;
