@@ -100,6 +100,8 @@ const remoteVideo = document.getElementById("remoteVideo");
     const roomId = roomInput.value.trim();
     if (!roomId) { alert("Enter Room ID!"); return; }
     currentRoom = roomId;
+    // Clean old call data
+database.ref("calls/" + currentRoom).remove();
     // ===== WebRTC Setup =====
 database.ref("calls/" + currentRoom + "/offer").once("value")
   .then(snapshot => {
