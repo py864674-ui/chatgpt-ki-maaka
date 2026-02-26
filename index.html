@@ -71,9 +71,7 @@ window.onload = function() {
   let peerConnection;
   const SYNC_THRESHOLD = 0.5; // seconds difference allowed
 
-  const servers = {
-    iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-  };
+  const servers = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 
   const moviePlayer = document.getElementById("moviePlayer");
   const joinBtn = document.getElementById("joinBtn");
@@ -92,9 +90,20 @@ window.onload = function() {
     messagingSenderId: "424851022131",
     appId: "1:424851022131:web:d3c090eafa662e0f2b1e46"
   };
-
   firebase.initializeApp(firebaseConfig);
   const database = firebase.database();
+
+  // ===== Host Sync =====
+  function hostSync() {
+    if (!isHost || !currentRoom) return;
+    database.ref("rooms/" + currentRoom + "/sync").set({
+      time: moviePlayer.currentTime,
+      playing: !moviePlayer.paused
+    });
+  }
+  setInterval(hostSync, 300);
+  moviePlayer.addEventListener("play", hostSync);
+  moviePlayer.addEventListener("pause", hostSync);
 
   // ===== Join Room =====
   joinBtn.onclick = function() {
@@ -123,7 +132,7 @@ window.onload = function() {
         .then(snap => { if (!snap.exists()) createOffer(); else answerOffer(snap.val()); });
     });
 
-    // Listen for video URL updates
+    // Listen for video URL updates (always active, even for new viewers)
     database.ref("rooms/" + currentRoom + "/video").on("value", snapshot => {
       const data = snapshot.val();
       if (!data) return;
@@ -133,17 +142,6 @@ window.onload = function() {
         if (data.playing) moviePlayer.play();
         else moviePlayer.pause();
       }
-    });
-
-    // Listen for sync updates
-    database.ref("rooms/" + currentRoom + "/sync").on("value", snapshot => {
-      if (isHost) return;
-      const data = snapshot.val();
-      if (!data) return;
-      const diff = Math.abs(moviePlayer.currentTime - data.time);
-      if (diff > SYNC_THRESHOLD) moviePlayer.currentTime = data.time;
-      if (data.playing && moviePlayer.paused) moviePlayer.play();
-      if (!data.playing && !moviePlayer.paused) moviePlayer.pause();
     });
   };
 
@@ -159,23 +157,37 @@ window.onload = function() {
     database.ref("rooms/" + currentRoom + "/video").set({ url: url, time: 0, playing: true });
   };
 
-  // ===== Host Sync =====
-  function hostSync() {
-    if (!isHost) return;
-    database.ref("rooms/" + currentRoom + "/sync").set({ time: moviePlayer.currentTime, playing: !moviePlayer.paused });
-  }
-  setInterval(hostSync, 300);
-  moviePlayer.addEventListener("play", hostSync);
-  moviePlayer.addEventListener("pause", hostSync);
+  // ===== Global Sync Listener for all viewers =====
+  database.ref("rooms").on("child_changed", snapshot => {
+    if (!currentRoom || isHost) return;
+    const roomData = snapshot.val();
+    if (!roomData || !roomData.sync) return;
+    const sync = roomData.sync;
+    const diff = Math.abs(moviePlayer.currentTime - sync.time);
+    if (diff > SYNC_THRESHOLD) moviePlayer.currentTime = sync.time;
+    if (sync.playing && moviePlayer.paused) moviePlayer.play();
+    if (!sync.playing && !moviePlayer.paused) moviePlayer.pause();
+  });
 
   // ===== WebRTC Functions =====
   async function createOffer() {
     const offer = await peerConnection.createOffer();
     await peerConnection.setLocalDescription(offer);
     await database.ref("calls/" + currentRoom).set({ offer: { type: offer.type, sdp: offer.sdp } });
-    peerConnection.onicecandidate = event => { if (event.candidate) database.ref("calls/" + currentRoom + "/callerCandidates").push(event.candidate.toJSON()); };
-    database.ref("calls/" + currentRoom + "/answer").on("value", async snapshot => { const data = snapshot.val(); if (!data) return; await peerConnection.setRemoteDescription(new RTCSessionDescription(data)); });
-    database.ref("calls/" + currentRoom + "/calleeCandidates").on("child_added", snapshot => { peerConnection.addIceCandidate(new RTCIceCandidate(snapshot.val())); });
+
+    peerConnection.onicecandidate = event => {
+      if (event.candidate) database.ref("calls/" + currentRoom + "/callerCandidates").push(event.candidate.toJSON());
+    };
+
+    database.ref("calls/" + currentRoom + "/answer").on("value", async snapshot => {
+      const data = snapshot.val();
+      if (!data) return;
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(data));
+    });
+
+    database.ref("calls/" + currentRoom + "/calleeCandidates").on("child_added", snapshot => {
+      peerConnection.addIceCandidate(new RTCIceCandidate(snapshot.val()));
+    });
   }
 
   async function answerOffer(offerData) {
@@ -183,11 +195,23 @@ window.onload = function() {
     const answer = await peerConnection.createAnswer();
     await peerConnection.setLocalDescription(answer);
     await database.ref("calls/" + currentRoom + "/answer").set({ type: answer.type, sdp: answer.sdp });
-    peerConnection.onicecandidate = event => { if (event.candidate) database.ref("calls/" + currentRoom + "/calleeCandidates").push(event.candidate.toJSON()); };
-    database.ref("calls/" + currentRoom + "/callerCandidates").on("child_added", snapshot => { peerConnection.addIceCandidate(new RTCIceCandidate(snapshot.val())); });
+
+    peerConnection.onicecandidate = event => {
+      if (event.candidate) database.ref("calls/" + currentRoom + "/calleeCandidates").push(event.candidate.toJSON());
+    };
+
+    database.ref("calls/" + currentRoom + "/callerCandidates").on("child_added", snapshot => {
+      peerConnection.addIceCandidate(new RTCIceCandidate(snapshot.val()));
+    });
   }
 };
 </script>
+ 
+
+   
+     
+ 
+
   
 
      
