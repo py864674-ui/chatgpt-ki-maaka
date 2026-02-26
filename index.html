@@ -97,36 +97,35 @@ const remoteVideo = document.getElementById("remoteVideo");
 
   // Join Room
 joinBtn.onclick = function() {
-  const roomId = roomInput.value.trim();
-  if (!roomId) { alert("Enter Room ID!"); return; }
+const roomId = roomInput.value.trim();
+if (!roomId) { alert("Enter Room ID!"); return; }
+if (peerConnection) {
+peerConnection.close();
+peerConnection = null;
+}
+currentRoom = roomId;
+// Clean old call data
+database.ref("calls/" + currentRoom).remove();
+// ===== WebRTC Setup =====
+database.ref("calls/" + currentRoom + "/offer").once("value")
+.then(snapshot => {
+if (!snapshot.exists()) {
+createOffer();
+} else {
+answerOffer(snapshot.val());
+}
+});
 
-  // Reset old peer connection
-  if (peerConnection) {
-    peerConnection.close();
-    peerConnection = null;
-  }
+// Determine if host  
+database.ref("rooms/" + currentRoom + "/video").once("value", snapshot => {  
+  isHost = !snapshot.exists();  
+  if (isHost) alert("You are the host. Paste a video URL.");  
+  else alert("You are a viewer. Video will load automatically.");  
+});  
 
-  currentRoom = roomId;
-
-  // Determine if host FIRST
-  database.ref("rooms/" + currentRoom + "/video").once("value", snapshot => {
-    isHost = !snapshot.exists();
-
-    if (isHost) {
-      // 🔥 Only host clears previous WebRTC call data
-      database.ref("calls/" + currentRoom).remove();
-      alert("You are the host.");
-    } else {
-      alert("You are a viewer.");
-    }
-
-    // ===== WebRTC Setup Trigger =====
-    database.ref("calls/" + currentRoom + "/offer").once("value")
-      .then(snapshot => {
-        if (!snapshot.exists()) {
-          createOffer();
-        } else {
-          answerOffer(snapshot.val());
+// Listen for video URL changes  
+database.ref("rooms/" + currentRoom + "/video").on("value", snapshot => {  
+  const data = snapshot.val();
         }
       });
   });
