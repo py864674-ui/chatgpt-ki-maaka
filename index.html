@@ -31,7 +31,7 @@
 <hr>
 <h2>Video Chat</h2>
 <video id="localVideo" autoplay muted playsinline></video>
-<div id="remoteVideos"></div>
+<video id="remoteVideo" autoplay playsinline></video>
 <script>
 window.onload = function() {
   navigator.mediaDevices.getUserMedia({ video: true, audio: true })
