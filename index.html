@@ -203,6 +203,11 @@ database.ref("calls/" + currentRoom + "/offer").once("value")
       const answerDesc = new RTCSessionDescription(data);
       await peerConnection.setRemoteDescription(answerDesc);
     });
+    database.ref("calls/" + currentRoom + "/calleeCandidates")
+  .on("child_added", snapshot => {
+    const candidate = new RTCIceCandidate(snapshot.val());
+    peerConnection.addIceCandidate(candidate);
+  });
 }
 
 async function answerOffer(offerData) {
