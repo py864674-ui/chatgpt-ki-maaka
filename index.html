@@ -67,13 +67,20 @@ window.onload = function() {
     const roomId = roomInput.value.trim();
     if (!roomId) { alert("Enter a Room ID!"); return; }
     currentRoom = roomId;
-    isHost = true;
-    alert("Room ready: " + currentRoom);
 
-    // Listen for video URL changes (for non-hosts)
+    // Determine if host or friend
+    // If host hasn't set video yet, the one who clicks loadVideoBtn first is host
+    database.ref("rooms/" + currentRoom + "/video").once("value", (snapshot) => {
+      const data = snapshot.val();
+      isHost = !data; // Host if video not set yet
+      if (isHost) alert("You are the host. Paste video URL.");
+      else alert("You are a viewer. Video will load automatically.");
+    });
+
+    // Listen for video URL changes (for viewers)
     database.ref("rooms/" + currentRoom + "/video").on("value", (snapshot) => {
       const data = snapshot.val();
-      if (data && !isHost) {
+      if (data) {
         moviePlayer.src = data.url;
         moviePlayer.currentTime = data.time || 0;
         if (data.playing) moviePlayer.play();
@@ -101,6 +108,8 @@ window.onload = function() {
     moviePlayer.src = url;
     moviePlayer.currentTime = 0;
     moviePlayer.play();
+
+    isHost = true;
 
     // Save video URL to Firebase
     database.ref("rooms/" + currentRoom + "/video").set({
