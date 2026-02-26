@@ -205,56 +205,66 @@ window.onload = function () {
   // ===== WebRTC =====
   async function createOffer() {
 
-    const offer = await peerConnection.createOffer();
-    await peerConnection.setLocalDescription(offer);
+  const offer = await peerConnection.createOffer();
+  await peerConnection.setLocalDescription(offer);
 
-    await database.ref("calls/" + currentRoom).set({
-      offer: offer
+  await database.ref("calls/" + currentRoom).set({
+    offer: offer
+  });
+
+  // Send caller ICE candidates
+  peerConnection.onicecandidate = event => {
+    if (event.candidate) {
+      database.ref("calls/" + currentRoom + "/callerCandidates")
+        .push(event.candidate.toJSON());
+    }
+  };
+
+  // Listen for answer
+  database.ref("calls/" + currentRoom + "/answer")
+    .on("value", async snapshot => {
+      const data = snapshot.val();
+      if (!data) return;
+
+      await peerConnection.setRemoteDescription(
+        new RTCSessionDescription(data)
+      );
     });
 
-    peerConnection.onicecandidate = event => {
-      if (event.candidate) {
-        database.ref("calls/" + currentRoom + "/callerCandidates")
-          .push(event.candidate.toJSON());
-      }
-    };
-
-    database.ref("calls/" + currentRoom + "/answer")
-      .on("value", async snapshot => {
-        const data = snapshot.val();
-        if (!data) return;
-
-        await peerConnection.setRemoteDescription(
-          new RTCSessionDescription(data)
-        );
-      });
+  // 🔥 VERY IMPORTANT — Listen for callee ICE candidates
+  database.ref("calls/" + currentRoom + "/calleeCandidates")
+    .on("child_added", snapshot => {
+      const candidate = new RTCIceCandidate(snapshot.val());
+      peerConnection.addIceCandidate(candidate);
+    });
   }
 
   async function answerOffer(offerData) {
 
-    await peerConnection.setRemoteDescription(
-      new RTCSessionDescription(offerData)
-    );
+  await peerConnection.setRemoteDescription(
+    new RTCSessionDescription(offerData)
+  );
 
-    const answer = await peerConnection.createAnswer();
-    await peerConnection.setLocalDescription(answer);
+  const answer = await peerConnection.createAnswer();
+  await peerConnection.setLocalDescription(answer);
 
-    await database.ref("calls/" + currentRoom + "/answer").set(answer);
+  await database.ref("calls/" + currentRoom + "/answer").set(answer);
 
-    peerConnection.onicecandidate = event => {
-      if (event.candidate) {
-        database.ref("calls/" + currentRoom + "/calleeCandidates")
-          .push(event.candidate.toJSON());
-      }
-    };
+  // Send callee ICE candidates
+  peerConnection.onicecandidate = event => {
+    if (event.candidate) {
+      database.ref("calls/" + currentRoom + "/calleeCandidates")
+        .push(event.candidate.toJSON());
+    }
+  };
 
-    database.ref("calls/" + currentRoom + "/callerCandidates")
-      .on("child_added", snapshot => {
-        const candidate = new RTCIceCandidate(snapshot.val());
-        peerConnection.addIceCandidate(candidate);
-      });
-  }
-
+  // Listen for caller ICE candidates
+  database.ref("calls/" + currentRoom + "/callerCandidates")
+    .on("child_added", snapshot => {
+      const candidate = new RTCIceCandidate(snapshot.val());
+      peerConnection.addIceCandidate(candidate);
+    });
+}
 };
 </script>
 
