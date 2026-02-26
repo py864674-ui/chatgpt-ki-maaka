@@ -33,7 +33,16 @@
 <video id="localVideo" autoplay muted playsinline></video>
 <div id="remoteVideos"></div>
 <script>
-window.onload = function() {
+window.onload = function() {navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+  .then(stream => {
+    const localVideo = document.getElementById('localVideo');
+    localVideo.srcObject = stream;
+    window.localStream = stream; // save for later WebRTC use
+  })
+  .catch(err => {
+    alert("Please allow camera and microphone access!");
+    console.error(err);
+  });
   let currentRoom = "";
   let isHost = false;
   const SYNC_THRESHOLD = 0.5; // seconds difference allowed
