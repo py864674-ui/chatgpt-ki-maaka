@@ -28,7 +28,10 @@
 <button id="loadVideoBtn">Load Video</button>
 
 <video id="moviePlayer" controls></video>
-
+<hr>
+<h2>Video Chat</h2>
+<video id="localVideo" autoplay muted playsinline></video>
+<div id="remoteVideos"></div>
 <script>
 window.onload = function() {
   let currentRoom = "";
