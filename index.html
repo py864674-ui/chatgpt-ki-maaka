@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Watch Party Pro">
+<title>Watch Party Pro</title>
+
+<style>
+  body {
+    margin: 0;
+    padding: 20px;
+    font-family: Arial, sans-serif;
+    background-color: #f5f5f5;
+  }
+  h1 { margin-bottom: 20px; }
+  input, button { margin-top: 10px; display: block; padding: 8px; font-size: 16px; }
+  video { width: 100%; max-width: 700px; margin-top: 15px; display: block; }
+</style>
+
+<!-- Firebase Compat Scripts -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+</head>
+<body>
+
+<h1>Watch Party Pro</h1>
+
+<!-- Room Join -->
+<input type="text" id="roomInput" placeholder="Enter Room ID">
+<button id="joinBtn">Join Room</button>
+
+<!-- Video URL input -->
+<input type="text" id="videoUrlInput" placeholder="Paste Video URL (direct .mp4)">
+<button id="loadVideoBtn">Load Video</button>
+
+<!-- Video Player -->
+<video id="moviePlayer" controls></video>
+
+<script>
+window.onload = function() {
+  let currentRoom = "";
+  let isHost = false;
+
+  const moviePlayer = document.getElementById("moviePlayer");
+  const joinBtn = document.getElementById("joinBtn");
+  const roomInput = document.getElementById("roomInput");
+  const videoUrlInput = document.getElementById("videoUrlInput");
+  const loadVideoBtn = document.getElementById("loadVideoBtn");
+
+  // Firebase config
+  const firebaseConfig = {
+    apiKey: "AIzaSyBWgS5isj1hERu1IXh6xv1cn83xftdeDgo",
+    authDomain: "watch-party-pro.firebaseapp.com",
+    databaseURL: "https://watch-party-pro-default-rtdb.firebaseio.com",
+    projectId: "watch-party-pro",
+    storageBucket: "watch-party-pro.appspot.com",
+    messagingSenderId: "424851022131",
+    appId: "1:424851022131:web:d3c090eafa662e0f2b1e46"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const database = firebase.database();
+
+  // Join room
+  joinBtn.onclick = function() {
+    const roomId = roomInput.value.trim();
+    if (!roomId) { alert("Enter a Room ID!"); return; }
+    currentRoom = roomId;
+    isHost = true;
+    alert("Room ready: " + currentRoom);
+
+    // Listen for video URL changes (for non-hosts)
+    database.ref("rooms/" + currentRoom + "/video").on("value", (snapshot) => {
+      const data = snapshot.val();
+      if (data && !isHost) {
+        moviePlayer.src = data.url;
+        moviePlayer.currentTime = data.time || 0;
+        if (data.playing) moviePlayer.play();
+        else moviePlayer.pause();
+      }
+    });
+
+    // Listen for playback sync
+    database.ref("rooms/" + currentRoom + "/sync").on("value", (snapshot) => {
+      const data = snapshot.val();
+      if (data && !isHost) {
+        moviePlayer.currentTime = data.time;
+        if (data.playing) moviePlayer.play();
+        else moviePlayer.pause();
+      }
+    });
+  };
+
+  // Host loads video URL
+  loadVideoBtn.onclick = function() {
+    if (!currentRoom) { alert("Join a room first!"); return; }
+    const url = videoUrlInput.value.trim();
+    if (!url) { alert("Paste a valid video URL!"); return; }
+
+    moviePlayer.src = url;
+    moviePlayer.currentTime = 0;
+    moviePlayer.play();
+
+    // Save video URL to Firebase
+    database.ref("rooms/" + currentRoom + "/video").set({
+      url: url,
+      time: 0,
+      playing: true
+    });
+  };
+
+  // Sync host playback with friends
+  moviePlayer.addEventListener("timeupdate", () => {
+    if (!isHost) return;
+    database.ref("rooms/" + currentRoom + "/sync").set({
+      time: moviePlayer.currentTime,
+      playing: !moviePlayer.paused
+    });
+  });
+
+  moviePlayer.addEventListener("play", () => {
+    if (!isHost) return;
+    database.ref("rooms/" + currentRoom + "/sync").update({ playing: true });
+  });
+
+  moviePlayer.addEventListener("pause", () => {
+    if (!isHost) return;
+    database.ref("rooms/" + currentRoom + "/sync").update({ playing: false });
+  });
+};
+</script>
+
+</body>
+</html>
